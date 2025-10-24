@@ -45,23 +45,38 @@ void parse_command(char line[], char *args[], int *argsc)
 ///Launch related functions
 void child(char *args[], int argsc)
 {
-    ///Implement this function:
+    // Attempt to replace the process image with the given command
+    execvp(args[ARG_PROGNAME], args);
 
-    ///Use execvp to load the binary 
-    ///of the command specified in args[ARG_PROGNAME].
-    ///For reference, see the code in lecture 3.
+    // If execvp returns, it failed
+    perror("execvp failed");
+    exit(1);  // Exit child if execvp fails
 }
 
 void launch_program(char *args[], int argsc)
 {
-    ///Implement this function:
+    // Handle built-in "exit" command before forking
+    if (argsc > 0 && strcmp(args[ARG_PROGNAME], "exit") == 0)
+    {
+        printf("Exiting shell...\n");
+        exit(0);
+    }
 
-    ///fork() a child process.
-    ///In the child part of the code,
-    ///call child(args, argv)
-    ///For reference, see the code in lecture 2.
+    pid_t pid = fork();
 
-    ///Handle the 'exit' command;
-    ///so that the shell, not the child process,
-    ///exits.
+    if (pid < 0)
+    {
+        perror("fork failed");
+        exit(1);
+    }
+    else if (pid == 0)
+    {
+        // Child process
+        child(args, argsc);
+    }
+    else
+    {
+        // Parent process — wait for child to complete
+        waitpid(pid, NULL, 0);
+    }
 }
