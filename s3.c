@@ -80,3 +80,53 @@ void launch_program(char *args[], int argsc)
         waitpid(pid, NULL, 0);
     }
 }
+
+void launch_program_with_redirection(char *args[], int argsc){
+    // Handle built-in "exit" command before forking
+    if (argsc > 0 && strcmp(args[ARG_PROGNAME], "exit") == 0){
+        printf("Exiting shell...\n");
+        exit(0);
+    }
+
+    pid_t pid = fork();
+
+    if (pid < 0){
+        perror("fork failed");
+        exit(1);
+
+    } else if (pid == 0){
+        // Child process
+        for(int i=0; i<argsc; i++){
+            if(args[i] == "<"){ // Input redirection
+                child_with_input_redirected(args, argsc);
+                break;
+
+            } else if(args[i] == ">"){ // Output redirection
+                child_with_output_redirected(args, argsc);
+                break;
+            }
+        }
+
+    } else {
+        // Parent process — wait for child to complete
+        waitpid(pid, NULL, 0);
+    }
+}
+
+void child_with_output_redirected(char *args[], int argsc){
+
+}
+
+void child_with_input_redirected(char *args[], int argsc){
+    
+}
+
+int command_with_redirection(char line[]){
+    // Check for < or >
+    for(int i=0; line[i] != '\0'; i++){
+        if(line[i] == '<' || line[i] == '>'){
+            return 1; // Redirection found
+        }
+    }
+    
+}
