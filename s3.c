@@ -82,6 +82,10 @@ void launch_program(char *args[], int argsc)
 }
 
 void launch_program_with_redirection(char *args[], int argsc){
+    
+    char filename[MAX_PROMPT_LEN];
+    int output_mode; //0 for overwrite, 1 for append
+    
     // Handle built-in "exit" command before forking
     if (argsc > 0 && strcmp(args[ARG_PROGNAME], "exit") == 0){
         printf("Exiting shell...\n");
@@ -97,12 +101,24 @@ void launch_program_with_redirection(char *args[], int argsc){
     } else if (pid == 0){
         // Child process
         for(int i=0; i<argsc; i++){
-            if(args[i] == "<"){ // Input redirection
-                child_with_input_redirected(args, argsc);
+            if(strcmp(args[i], "<") == 0){ // Input redirection
+                strcpy(filename, args[i+1]);
+                args[i] = NULL;
+                child_with_input_redirected(args, argsc, filename);
                 break;
 
-            } else if(args[i] == ">"){ // Output redirection
-                child_with_output_redirected(args, argsc);
+            } else if(strcmp(args[i], ">") == 0){ // Output redirection
+                strcpy(filename, args[i+1]);
+                args[i] = NULL;
+                output_mode = 0;
+                child_with_output_redirected(args, argsc, filename, output_mode);
+                break;
+
+            } else if(strcmp(args[i], ">>") == 0){ // Append redirection
+                strcpy(filename, args[i+1]);
+                output_mode = 1;
+                args[i] = NULL;
+                child_with_output_redirected(args, argsc, filename, output_mode);
                 break;
             }
         }
@@ -113,12 +129,43 @@ void launch_program_with_redirection(char *args[], int argsc){
     }
 }
 
-void child_with_output_redirected(char *args[], int argsc){
+void child_with_output_redirected(char *args[], int argsc, char* filename, int output_mode){
+    if(output_mode == 1){ // Append mode
+        int fd = open(filename, O_WRONLY | O_CREAT | O_APPEND, 0644); // 0644 = rw-r--r--
+        if (fd < 0) {
+            perror("open failed");
+            exit(1);
+        }
+        dup2(fd, STDOUT_FILENO);
+        close(fd);
 
+    } else {
+        int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644); // 0644 = rw-r--r--
+        if (fd < 0) {
+            perror("open failed");
+            exit(1);
+        }
+        dup2(fd, STDOUT_FILENO);
+        close(fd);
+    }
+
+    execvp(args[ARG_PROGNAME], args);
+    perror("execvp failed");
+    exit(1); // execvp failed
 }
 
-void child_with_input_redirected(char *args[], int argsc){
-    
+void child_with_input_redirected(char *args[], int argsc, char* filename){
+    int fd = open(filename, O_RDONLY);
+    if (fd < 0) {
+            perror("open failed");
+            exit(1);
+        }
+    dup2(fd, STDIN_FILENO);
+    close(fd);
+
+    execvp(args[ARG_PROGNAME], args);
+    perror("execvp failed");
+    exit(1); // execvp failed
 }
 
 int command_with_redirection(char line[]){
@@ -128,5 +175,5 @@ int command_with_redirection(char line[]){
             return 1; // Redirection found
         }
     }
-    
+    return 0; // No redirection found
 }
