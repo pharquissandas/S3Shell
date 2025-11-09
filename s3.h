@@ -46,4 +46,9 @@ static inline void reap() {
     wait(NULL);
 }
 
+/* pipe */
+int command_with_pipe(char line[]);
+int split_pipeline(char line[], char *commands[]);
+void launch_pipeline(char *commands[], int num_cmds);
+
 #endif

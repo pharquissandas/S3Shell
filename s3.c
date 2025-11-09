@@ -196,3 +196,110 @@ void run_cd(char *args[], int argsc, char lwd[]) {
 
     strcpy(lwd, prev);
 }
+
+/* detects pipes */
+int command_with_pipe(char line[]) {
+    for (int i = 0; line[i] != '\0'; i++) {
+        if (line[i] == '|')
+            return 1;
+    }
+    return 0;
+}
+
+/* split into separate commands */
+int split_pipeline(char line[], char *commands[]){
+    int count = 0;
+    char *token = strtok(line, "|");
+    while (token != NULL && count < MAX_ARGS-1){
+        commands[count++] = token;
+        token = strtok(NULL, "|");
+    }
+    commands[count] = NULL;
+    return count;
+}
+
+/* launch the full pipeline */
+void launch_pipeline(char *commands[], int num_cmds){
+    int pipefds[2 * (num_cmds-1)];
+    pid_t pids[num_cmds];
+
+    // create all pipes
+    for (int i = 0; i < num_cmds - 1; i++){
+        if (pipe(pipefds + i * 2) < 0){
+            perror("pipe failed");
+            exit(1);
+        }
+    }
+
+    // loop through all commands in the pipeline
+    for (int i = 0; i < num_cmds; i++){
+        pids[i] = fork();
+
+        if (pids[i] < 0) {
+            perror("fork failed");
+            exit(1);
+        }
+
+        if (pids[i] == 0) { // child
+            // if not the first command, redirect stdin to previous pipe
+            if (i > 0){
+                dup2(pipefds[(i - 1) * 2], STDIN_FILENO);
+            }
+
+            // if not the last command, redirect stdout to next pipe
+            if (i < num_cmds - 1){
+                dup2(pipefds[i * 2 + 1], STDOUT_FILENO);
+            }
+
+            // close all pipe fds in the child
+            for (int j = 0; j < 2 * (num_cmds - 1); j++){
+                close(pipefds[j]);
+            }
+
+            // parse current command
+            char *args[MAX_ARGS];
+            int argsc;
+            parse_command(commands[i], args, &argsc);
+
+            // handle redirection (only applies if '>' or '>>' appear in this command)
+            for (int j = 0; args[j] != NULL; j++){
+                if (strcmp(args[j], ">") == 0 || strcmp(args[j], ">>") == 0){
+                    int append = (strcmp(args[j], ">>") == 0);
+                    char *filename = args[j+1];
+
+                    int fd;
+                    if (append)
+                        fd = open(filename, O_WRONLY | O_CREAT | O_APPEND, 0644);
+                    else
+                        fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+
+                    if (fd < 0){
+                        perror("open failed");
+                        exit(1);
+                    }
+
+                    dup2(fd, STDOUT_FILENO); // redirect stdout to file
+                    close(fd);
+
+                    args[j] = NULL; // end args before '>'
+                    break;
+                }
+            }
+
+            // run the command
+            execvp(args[0], args);
+            perror("execvp failed");
+            exit(1);
+        }
+    }
+
+    // parent closes all pipe fds
+    for (int i = 0; i < 2 * (num_cmds - 1); i++){
+        close(pipefds[i]);
+    }
+
+    // wait for all children
+    for (int i = 0; i < num_cmds; i++){
+        waitpid(pids[i], NULL, 0);
+    }
+}
