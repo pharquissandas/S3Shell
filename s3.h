@@ -47,8 +47,8 @@ void launch_program(char *args[], int argsc);
 
 ///Redirection related functions
 void launch_program_with_redirection(char *args[], int argsc);
-void child_with_output_redirected(char *args[], int argsc);
-void child_with_input_redirected(char *args[], int argsc);
+void child_with_output_redirected(char *args[], int argsc, char* filename, int output_mode);
+void child_with_input_redirected(char *args[], int argsc, char* filename);
 int command_with_redirection(char line[]); // Returns 1 if command contains redirection, 0 otherwise
 
 #endif
