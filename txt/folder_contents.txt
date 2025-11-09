@@ -1,0 +1,12 @@
+.:
+s3
+s3.c
+s3.h
+s3main.c
+txt
+
+./txt:
+folder_contents.txt
+new_file.txt
+phrases.txt
+phrases_copy.txt
