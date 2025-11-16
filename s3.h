@@ -51,4 +51,8 @@ int command_with_pipe(char line[]);
 int split_pipeline(char line[], char *commands[]);
 void launch_pipeline(char *commands[], int num_cmds);
 
+/* batched command */
+int command_with_batch(char line[]);
+int split_batch(char line[], char *commands[]);
+
 #endif
