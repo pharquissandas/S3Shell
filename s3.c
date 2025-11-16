@@ -62,6 +62,17 @@ void launch_program(char *args[], int argsc) {
     }
 }
 
+//========================================================================
+
+/* check if command line has < or > */
+int command_with_redirection(char line[]) {
+    for (int i = 0; line[i] != '\0'; i++) {
+        if (line[i] == '<' || line[i] == '>')
+            return 1;
+    }
+    return 0;
+}
+
 /* handle commands with redirection */
 void launch_program_with_redirection(char *args[], int argsc) {
     char filename[MAX_PROMPT_LEN];
@@ -105,11 +116,11 @@ void launch_program_with_redirection(char *args[], int argsc) {
 /* redirect stdout */
 void child_with_output_redirected(char *args[], int argsc, char *filename, int output_mode) {
     int fd;
-    if (output_mode == 1)
+    if (output_mode == 1){
         fd = open(filename, O_WRONLY | O_CREAT | O_APPEND, 0644);
-    else
+    } else {
         fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-
+    }
     if (fd < 0) {
         perror("open failed");
         exit(1);
@@ -139,14 +150,7 @@ void child_with_input_redirected(char *args[], int argsc, char *filename) {
     exit(1);
 }
 
-/* check if command line has < or > */
-int command_with_redirection(char line[]) {
-    for (int i = 0; line[i] != '\0'; i++) {
-        if (line[i] == '<' || line[i] == '>')
-            return 1;
-    }
-    return 0;
-}
+//========================================================================
 
 /* initialize last working directory */
 void init_lwd(char lwd[]) {
@@ -196,6 +200,8 @@ void run_cd(char *args[], int argsc, char lwd[]) {
 
     strcpy(lwd, prev);
 }
+
+//========================================================================
 
 /* detects pipes */
 int command_with_pipe(char line[]) {
@@ -268,11 +274,11 @@ void launch_pipeline(char *commands[], int num_cmds){
                     char *filename = args[j+1];
 
                     int fd;
-                    if (append)
+                    if (append){
                         fd = open(filename, O_WRONLY | O_CREAT | O_APPEND, 0644);
-                    else
+                    } else {
                         fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-
+                    }
                     if (fd < 0){
                         perror("open failed");
                         exit(1);
@@ -303,3 +309,26 @@ void launch_pipeline(char *commands[], int num_cmds){
         waitpid(pids[i], NULL, 0);
     }
 }
+
+//========================================================================
+
+// check for batched commands separated by ;
+int command_with_batch(char line[]) {
+    for (int i = 0; line[i] != '\0'; i++) {
+        if (line[i] == ';')
+            return 1;
+    }
+    return 0;
+}
+
+int split_batch(char line[], char *commands[]) {
+    int count = 0;
+    char *token = strtok(line, ";");
+    while (token != NULL && count < MAX_ARGS - 1) {
+        commands[count++] = token;
+        token = strtok(NULL, ";");
+    }
+    commands[count] = NULL;
+    return count;
+}
+
