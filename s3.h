@@ -47,7 +47,7 @@ void child_with_output_redirected(char *args[], int argsc, char *filename, int o
 void child_with_input_redirected(char *args[], int argsc, char *filename);
 int command_with_redirection(char line[]);
 
-/* pipeline */
+/* pipe support */
 int command_with_pipe(char line[]);
 int split_pipeline(char line[], char *commands[]);
 void launch_pipeline(char *commands[], int num_cmds);
@@ -56,9 +56,9 @@ void launch_pipeline(char *commands[], int num_cmds);
 int command_with_batch(char line[]);
 int split_batch(char line[], char *commands[]);
 
-/* subshells */
-int command_with_subshell(char line[]);
-void split_subshell(char *line, char *subcmd);
+/* subshells support (nested) */
+int command_with_subshell(char *line);
+void extract_next_subshell(char *line, int start, int *sub_start, int *sub_end);
 void launch_subshell(char *line);
 
 /* execute command */
