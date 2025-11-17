@@ -43,8 +43,7 @@ void launch_program(char *args[], int argsc);
 
 /* redirection */
 void launch_program_with_redirection(char *args[], int argsc);
-void child_with_output_redirected(char *args[], int argsc, char *filename, int output_mode);
-void child_with_input_redirected(char *args[], int argsc, char *filename);
+void child_with_redirection(char *args[], int argsc);
 int command_with_redirection(char line[]);
 
 /* pipe support */
