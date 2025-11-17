@@ -1,9 +1,9 @@
 #include "s3.h"
 
 /* build the shell prompt showing the current directory */
-void construct_shell_prompt(char shell_prompt[], char lwd[]) {
+void construct_shell_prompt(char shell_prompt[], char lwd[]){
     char cwd[MAX_PROMPT_LEN - 10];  // leave room for formatting
-    if (getcwd(cwd, sizeof(cwd)) == NULL) {
+    if (getcwd(cwd, sizeof(cwd)) == NULL){
         perror("getcwd failed");
         exit(1);
     }
@@ -12,12 +12,12 @@ void construct_shell_prompt(char shell_prompt[], char lwd[]) {
 }
 
 /* print the prompt and read user input */
-void read_command_line(char line[], char lwd[]) {
+void read_command_line(char line[], char lwd[]){
     char shell_prompt[MAX_PROMPT_LEN];
     construct_shell_prompt(shell_prompt, lwd);
     printf("%s", shell_prompt);
 
-    if (fgets(line, MAX_LINE, stdin) == NULL) {
+    if (fgets(line, MAX_LINE, stdin) == NULL){
         perror("fgets failed");
         exit(1);
     }
@@ -27,73 +27,46 @@ void read_command_line(char line[], char lwd[]) {
 }
 
 /* tokenize command line into args array */
-void parse_command(char line[], char *args[], int *argsc) {
+void parse_command(char line[], char *args[], int *argsc){
     char *token = strtok(line, " ");
     *argsc = 0;
-    while (token != NULL && *argsc < MAX_ARGS - 1) {
+    while (token != NULL && *argsc < MAX_ARGS - 1){
         args[(*argsc)++] = token;
         token = strtok(NULL, " ");
     }
-    args[*argsc] = NULL;
+    args[*argsc] = NULL; // null terminate
 }
 
 /* child executes the program */
-void child(char *args[], int argsc) {
+void child(char *args[], int argsc){
     execvp(args[ARG_PROGNAME], args);
     perror("execvp failed");
     exit(1);
 }
 
 /* run a command normally */
-void launch_program(char *args[], int argsc) {
-    if (argsc > 0 && strcmp(args[ARG_PROGNAME], "exit") == 0) {
+void launch_program(char *args[], int argsc){
+    if (argsc > 0 && strcmp(args[ARG_PROGNAME], "exit") == 0){
         printf("exiting shell...\n");
         exit(0);
     }
 
     pid_t pid = fork();
-    if (pid < 0) {
+    if(pid < 0){
         perror("fork failed");
         exit(1);
-    } else if (pid == 0) {
+    }
+    else if (pid == 0){
         child(args, argsc);
-    } else {
+    }
+    else {
         waitpid(pid, NULL, 0);
     }
 }
-//========================================================================
-
-void execute_command(char *cmd, char lwd[]) {
-    char cmd_copy[MAX_LINE];
-    char *args[MAX_ARGS];
-    int argsc;
-
-    // make a copy to avoid modifying original
-    strcpy(cmd_copy, cmd);
-
-    if (command_with_subshell(cmd_copy)) {
-        launch_subshell(cmd_copy);
-    } else if (is_cd(cmd_copy)) {
-        parse_command(cmd_copy, args, &argsc);
-        run_cd(args, argsc, lwd);
-    } else if (command_with_pipe(cmd_copy)) {
-        char *pipe_commands[MAX_ARGS];
-        int num_cmds = split_pipeline(cmd_copy, pipe_commands);
-        launch_pipeline(pipe_commands, num_cmds);
-    } else if (command_with_redirection(cmd_copy)) {
-        parse_command(cmd_copy, args, &argsc);
-        launch_program_with_redirection(args, argsc);
-    } else {
-        parse_command(cmd_copy, args, &argsc);
-        launch_program(args, argsc);
-    }
-}
-
-//========================================================================
 
 /* check if command line has < or > */
-int command_with_redirection(char line[]) {
-    for (int i = 0; line[i] != '\0'; i++) {
+int command_with_redirection(char line[]){
+    for(int i = 0; line[i] != '\0'; i++){
         if (line[i] == '<' || line[i] == '>')
             return 1;
     }
@@ -101,34 +74,36 @@ int command_with_redirection(char line[]) {
 }
 
 /* handle commands with redirection */
-void launch_program_with_redirection(char *args[], int argsc) {
+void launch_program_with_redirection(char *args[], int argsc){
     char filename[MAX_PROMPT_LEN];
     int output_mode;
 
-    if (argsc > 0 && strcmp(args[ARG_PROGNAME], "exit") == 0) {
-        printf("exiting shell...\n");
+    if(argsc > 0 && strcmp(args[ARG_PROGNAME], "exit") == 0){
+        printf("Exiting shell...\n");
         exit(0);
     }
 
     pid_t pid = fork();
-    if (pid < 0) {
+    if(pid < 0){
         perror("fork failed");
         exit(1);
-    } else if (pid == 0) {
-        for (int i = 0; i < argsc; i++) {
-            if (strcmp(args[i], "<") == 0) {
-                strcpy(filename, args[i + 1]);
+    } else if (pid == 0){
+        for (int i = 0; i < argsc; i++){
+            if (strcmp(args[i], "<") == 0){
+                strcpy(filename, args[i+1]);
                 args[i] = NULL;
                 child_with_input_redirected(args, argsc, filename);
                 break;
-            } else if (strcmp(args[i], ">") == 0) {
-                strcpy(filename, args[i + 1]);
+            } 
+            else if (strcmp(args[i], ">") == 0){
+                strcpy(filename, args[i+1]);
                 args[i] = NULL;
                 output_mode = 0;
                 child_with_output_redirected(args, argsc, filename, output_mode);
                 break;
-            } else if (strcmp(args[i], ">>") == 0) {
-                strcpy(filename, args[i + 1]);
+            } 
+            else if (strcmp(args[i], ">>") == 0){
+                strcpy(filename, args[i+1]);
                 args[i] = NULL;
                 output_mode = 1;
                 child_with_output_redirected(args, argsc, filename, output_mode);
@@ -141,18 +116,12 @@ void launch_program_with_redirection(char *args[], int argsc) {
 }
 
 /* redirect stdout */
-void child_with_output_redirected(char *args[], int argsc, char *filename, int output_mode) {
-    int fd;
-    if (output_mode == 1){
-        fd = open(filename, O_WRONLY | O_CREAT | O_APPEND, 0644);
-    } else {
-        fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    }
-    if (fd < 0) {
-        perror("open failed");
-        exit(1);
-    }
+void child_with_output_redirected(char *args[], int argsc, char *filename, int output_mode){
+    int fd = (output_mode == 1) ? 
+        open(filename, O_WRONLY | O_CREAT | O_APPEND, 0644) : 
+        open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
 
+    if (fd < 0) { perror("open failed"); exit(1); }
     dup2(fd, STDOUT_FILENO);
     close(fd);
 
@@ -162,13 +131,11 @@ void child_with_output_redirected(char *args[], int argsc, char *filename, int o
 }
 
 /* redirect stdin */
-void child_with_input_redirected(char *args[], int argsc, char *filename) {
+void child_with_input_redirected(char *args[], int argsc, char *filename){
     int fd = open(filename, O_RDONLY);
-    if (fd < 0) {
-        perror("open failed");
-        exit(1);
+    if(fd < 0){ 
+        perror("open failed"); exit(1);
     }
-
     dup2(fd, STDIN_FILENO);
     close(fd);
 
@@ -177,18 +144,16 @@ void child_with_input_redirected(char *args[], int argsc, char *filename) {
     exit(1);
 }
 
-//========================================================================
-
 /* initialize last working directory */
-void init_lwd(char lwd[]) {
-    if (getcwd(lwd, MAX_PROMPT_LEN - 6) == NULL) {
+void init_lwd(char lwd[]){
+    if (getcwd(lwd, MAX_PROMPT_LEN - 6) == NULL){
         perror("getcwd failed");
         exit(1);
     }
 }
 
 /* check if command is cd */
-int is_cd(char line[]) {
+int is_cd(char line[]){
     char temp[MAX_LINE];
     strcpy(temp, line);
     char *token = strtok(temp, " ");
@@ -196,42 +161,32 @@ int is_cd(char line[]) {
 }
 
 /* handle cd logic: cd, cd -, cd <dir> */
-void run_cd(char *args[], int argsc, char lwd[]) {
+void run_cd(char *args[], int argsc, char lwd[]){
     char cwd[MAX_PROMPT_LEN];
     char prev[MAX_PROMPT_LEN];
 
-    if (getcwd(cwd, sizeof(cwd)) == NULL) {
-        perror("getcwd failed");
-        return;
+    if (getcwd(cwd, sizeof(cwd)) == NULL){ 
+        perror("getcwd failed"); 
+        return; 
     }
-
     strcpy(prev, cwd);
 
-    if (argsc == 1) {
+    if (argsc == 1){
         char *home = getenv("HOME");
-        if (home == NULL) {
-            fprintf(stderr, "cd: home not set\n");
-            return;
-        }
-        if (chdir(home) != 0)
-            perror("cd failed");
+        if (home == NULL) { fprintf(stderr, "cd: HOME not set\n"); return; }
+        if (chdir(home) != 0) perror("cd failed");
     } else if (strcmp(args[1], "-") == 0) {
-        if (chdir(lwd) != 0)
-            perror("cd failed");
-        else
-            printf("%s\n", lwd);
+        if (chdir(lwd) != 0) perror("cd failed");
+        else printf("%s\n", lwd);
     } else {
-        if (chdir(args[1]) != 0)
-            perror("cd failed");
+        if (chdir(args[1]) != 0) perror("cd failed");
     }
 
     strcpy(lwd, prev);
 }
 
-//========================================================================
-
 /* detects pipes */
-int command_with_pipe(char line[]) {
+int command_with_pipe(char line[]){
     for (int i = 0; line[i] != '\0'; i++) {
         if (line[i] == '|')
             return 1;
@@ -300,21 +255,14 @@ void launch_pipeline(char *commands[], int num_cmds){
                     int append = (strcmp(args[j], ">>") == 0);
                     char *filename = args[j+1];
 
-                    int fd;
-                    if (append){
-                        fd = open(filename, O_WRONLY | O_CREAT | O_APPEND, 0644);
-                    } else {
-                        fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-                    }
-                    if (fd < 0){
+                    int fd=open(filename,O_WRONLY|O_CREAT|(append?O_APPEND:O_TRUNC),0644);
+                    if(fd<0){
                         perror("open failed");
                         exit(1);
                     }
-
-                    dup2(fd, STDOUT_FILENO); // redirect stdout to file
+                    dup2(fd,STDOUT_FILENO);
                     close(fd);
-
-                    args[j] = NULL; // end args before '>'
+                    args[j]=NULL;
                     break;
                 }
             }
@@ -337,12 +285,10 @@ void launch_pipeline(char *commands[], int num_cmds){
     }
 }
 
-//========================================================================
-
 // check for batched commands separated by ; only in the top level
-int command_with_batch(char line[]) {
+int command_with_batch(char line[]){
     int level = 0;
-    for (int i = 0; line[i] != '\0'; i++) {
+    for (int i = 0; line[i] != '\0'; i++){
         if (line[i] == '('){
             level++;
         } else if (line[i] == ')'){
@@ -354,45 +300,36 @@ int command_with_batch(char line[]) {
     return 0;
 }
 
-int split_batch(char line[], char *commands[]) {
+int split_batch(char line[], char *commands[]){
     int count = 0;
     int level = 0;
     char *start = line;
+    
+    /* skip leading whitespace */
+    while (*start == ' ' || *start == '\t') start++;
 
-    while (*start == ' ' || *start == '\t'){ // skip whitespace
-        start++;
-    } 
-
-    for (char *p = line; *p != '\0'; *p++){
-        if (*p == '('){
-            level++;
-        } else if (*p == ')'){
-            level--;
-        } else if (*p == ';' && level == 0){
+    for (char *p = line; *p != '\0'; p++){
+        if (*p == '(') level++;
+        else if (*p == ')') level--;
+        else if (*p == ';' && level == 0){
             *p = '\0';
-      
+            
+            /* trim trailing whitespace */
             char *end = p - 1;
-            while (end > start && (*end == ' ' || *end == '\t')) {// trim whitespace
-                *end = '\0';
-                end--;
-            }
+            while (end > start && (*end == ' ' || *end == '\t')) *end-- = '\0';
+            
             commands[count++] = start;
             start = p + 1;
-
-            while (*start == ' ' || *start == '\t'){ // skip whitespace
-                start++;
-            }
+            
+            /* skip leading whitespace for next command */
+            while (*start == ' ' || *start == '\t') start++;
         }
     }
 
-    // add last command
-    if (*start != '\0' && count < MAX_ARGS - 1) {
-        
+    /* handle last command */
+    if (*start != '\0'){
         char *end = start + strlen(start) - 1;
-        while(end > start && (*end == ' ' || *end == '\t')) { // trim whitespace
-            *end = '\0';
-            end--;
-        }
+        while (end > start && (*end == ' ' || *end == '\t')) *end-- = '\0';
         commands[count++] = start;
     }
 
@@ -400,21 +337,19 @@ int split_batch(char line[], char *commands[]) {
     return count;
 }
 
-//========================================================================
-
-int command_with_subshell(char line[]) {
-    for (int i = 0; line[i] != '\0'; i++) {
+int command_with_subshell(char line[]){
+    for (int i = 0; line[i] != '\0'; i++){
         if (line[i] == '(' || line[i] == ')')
             return 1;
     }
     return 0;
 }
 
-void split_subshell(char *line, char *subcmd) {
+void split_subshell(char *line, char *subcmd){
     char *start = strchr(line, '(');
     char *end   = strchr(line, ')');
 
-    if (!start || !end || end < start) {
+    if(!start || !end || end < start){
         fprintf(stderr, "mismatched parentheses");
         exit(1);
     }
@@ -424,19 +359,19 @@ void split_subshell(char *line, char *subcmd) {
     subcmd[end - start - 1] = '\0';
 }
 
-void launch_subshell(char *line) {
+void launch_subshell(char *line){
 
     char subcmd[MAX_LINE];
     split_subshell(line, subcmd);
 
     pid_t pid = fork();
 
-    if (pid < 0) {
+    if (pid < 0){
         perror("fork failed");
         return;
     }
 
-    if (pid == 0) { // execute command exactly like main but in child
+    if (pid == 0){ // execute command exactly like main but in child
         
         char subshell_lwd[MAX_PROMPT_LEN - 6];
         init_lwd(subshell_lwd);
@@ -444,14 +379,14 @@ void launch_subshell(char *line) {
         char subcopy[MAX_LINE];
         strcpy(subcopy, subcmd);
 
-        if (command_with_batch(subcopy)) {
+        if (command_with_batch(subcopy)){
             char *batch[MAX_ARGS];
             int batch_count = split_batch(subcopy, batch);
 
-            for (int i = 0; i < batch_count; i++) {
+            for (int i = 0; i < batch_count; i++){
                 execute_command(batch[i], subshell_lwd);
             }
-        } else {
+        } else{
             execute_command(subcopy, subshell_lwd);
         }
 
@@ -459,4 +394,32 @@ void launch_subshell(char *line) {
     }
 
     waitpid(pid, NULL, 0);
+}
+
+void execute_command(char *cmd, char lwd[]){
+    char cmd_copy[MAX_LINE];
+    strcpy(cmd_copy, cmd);
+    char *args[MAX_ARGS];
+    int argsc;
+
+    if (command_with_subshell(cmd_copy)){
+        launch_subshell(cmd_copy);
+    }
+    else if (is_cd(cmd_copy)){
+        parse_command(cmd_copy, args, &argsc);
+        run_cd(args, argsc, lwd);
+    }
+    else if (command_with_pipe(cmd_copy)){
+        char *pipe_commands[MAX_ARGS];
+        int num_cmds = split_pipeline(cmd_copy, pipe_commands);
+        launch_pipeline(pipe_commands, num_cmds);
+    }
+    else if (command_with_redirection(cmd_copy)){
+        parse_command(cmd_copy, args, &argsc);
+        launch_program_with_redirection(args, argsc);
+    }
+    else {
+        parse_command(cmd_copy, args, &argsc);
+        launch_program(args, argsc);
+    }
 }
