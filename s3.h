@@ -55,4 +55,12 @@ void launch_pipeline(char *commands[], int num_cmds);
 int command_with_batch(char line[]);
 int split_batch(char line[], char *commands[]);
 
+/* subshells */
+int command_with_subshell(char line[]);
+void split_subshell(char *line, char *subcmd);
+void launch_subshell(char *line);
+
+/* execute command */
+void execute_command(char *cmd, char lwd[]);
+
 #endif
