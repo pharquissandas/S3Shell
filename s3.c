@@ -61,6 +61,33 @@ void launch_program(char *args[], int argsc) {
         waitpid(pid, NULL, 0);
     }
 }
+//========================================================================
+
+void execute_command(char *cmd, char lwd[]) {
+    char cmd_copy[MAX_LINE];
+    char *args[MAX_ARGS];
+    int argsc;
+
+    // make a copy to avoid modifying original
+    strcpy(cmd_copy, cmd);
+
+    if (command_with_subshell(cmd_copy)) {
+        launch_subshell(cmd_copy);
+    } else if (is_cd(cmd_copy)) {
+        parse_command(cmd_copy, args, &argsc);
+        run_cd(args, argsc, lwd);
+    } else if (command_with_pipe(cmd_copy)) {
+        char *pipe_commands[MAX_ARGS];
+        int num_cmds = split_pipeline(cmd_copy, pipe_commands);
+        launch_pipeline(pipe_commands, num_cmds);
+    } else if (command_with_redirection(cmd_copy)) {
+        parse_command(cmd_copy, args, &argsc);
+        launch_program_with_redirection(args, argsc);
+    } else {
+        parse_command(cmd_copy, args, &argsc);
+        launch_program(args, argsc);
+    }
+}
 
 //========================================================================
 
@@ -293,7 +320,7 @@ void launch_pipeline(char *commands[], int num_cmds){
             }
 
             // run the command
-            execvp(args[0], args);
+            execvp(args[ARG_PROGNAME], args);
             perror("execvp failed");
             exit(1);
         }
@@ -312,23 +339,124 @@ void launch_pipeline(char *commands[], int num_cmds){
 
 //========================================================================
 
-// check for batched commands separated by ;
+// check for batched commands separated by ; only in the top level
 int command_with_batch(char line[]) {
+    int level = 0;
     for (int i = 0; line[i] != '\0'; i++) {
-        if (line[i] == ';')
+        if (line[i] == '('){
+            level++;
+        } else if (line[i] == ')'){
+            level--;
+        } else if (line[i] == ';' && level == 0){
             return 1;
+        }
     }
     return 0;
 }
 
 int split_batch(char line[], char *commands[]) {
     int count = 0;
-    char *token = strtok(line, ";");
-    while (token != NULL && count < MAX_ARGS - 1) {
-        commands[count++] = token;
-        token = strtok(NULL, ";");
+    int level = 0;
+    char *start = line;
+
+    while (*start == ' ' || *start == '\t'){ // skip whitespace
+        start++;
+    } 
+
+    for (char *p = line; *p != '\0'; *p++){
+        if (*p == '('){
+            level++;
+        } else if (*p == ')'){
+            level--;
+        } else if (*p == ';' && level == 0){
+            *p = '\0';
+      
+            char *end = p - 1;
+            while (end > start && (*end == ' ' || *end == '\t')) {// trim whitespace
+                *end = '\0';
+                end--;
+            }
+            commands[count++] = start;
+            start = p + 1;
+
+            while (*start == ' ' || *start == '\t'){ // skip whitespace
+                start++;
+            }
+        }
     }
+
+    // add last command
+    if (*start != '\0' && count < MAX_ARGS - 1) {
+        
+        char *end = start + strlen(start) - 1;
+        while(end > start && (*end == ' ' || *end == '\t')) { // trim whitespace
+            *end = '\0';
+            end--;
+        }
+        commands[count++] = start;
+    }
+
     commands[count] = NULL;
     return count;
 }
 
+//========================================================================
+
+int command_with_subshell(char line[]) {
+    for (int i = 0; line[i] != '\0'; i++) {
+        if (line[i] == '(' || line[i] == ')')
+            return 1;
+    }
+    return 0;
+}
+
+void split_subshell(char *line, char *subcmd) {
+    char *start = strchr(line, '(');
+    char *end   = strchr(line, ')');
+
+    if (!start || !end || end < start) {
+        fprintf(stderr, "mismatched parentheses");
+        exit(1);
+    }
+
+    // copy text between '(' and ')'
+    strncpy(subcmd, start+1, end - start - 1);
+    subcmd[end - start - 1] = '\0';
+}
+
+void launch_subshell(char *line) {
+
+    char subcmd[MAX_LINE];
+    split_subshell(line, subcmd);
+
+    pid_t pid = fork();
+
+    if (pid < 0) {
+        perror("fork failed");
+        return;
+    }
+
+    if (pid == 0) { // execute command exactly like main but in child
+        
+        char subshell_lwd[MAX_PROMPT_LEN - 6];
+        init_lwd(subshell_lwd);
+
+        char subcopy[MAX_LINE];
+        strcpy(subcopy, subcmd);
+
+        if (command_with_batch(subcopy)) {
+            char *batch[MAX_ARGS];
+            int batch_count = split_batch(subcopy, batch);
+
+            for (int i = 0; i < batch_count; i++) {
+                execute_command(batch[i], subshell_lwd);
+            }
+        } else {
+            execute_command(subcopy, subshell_lwd);
+        }
+
+        exit(0);
+    }
+
+    waitpid(pid, NULL, 0);
+}
