@@ -61,6 +61,8 @@ void launch_program(char *args[], int argsc){
     }
 }
 
+//========================================___CD___========================================
+
 /* initialize last working directory */
 void init_lwd(char lwd[]){
     if (getcwd(lwd, MAX_PROMPT_LEN - 6) == NULL){
@@ -114,6 +116,8 @@ int command_with_redirection(char line[]){
     return 0;
 }
 
+//========================================___REDIRECTION___========================================
+
 /* handle commands with redirection */
 void launch_program_with_redirection(char *args[], int argsc){
     if (argsc > 0 && strcmp(args[ARG_PROGNAME], "exit") == 0){
@@ -128,6 +132,7 @@ void launch_program_with_redirection(char *args[], int argsc){
         waitpid(pid, NULL, 0);
     }
 }
+
 void child_with_redirection(char *args[], int argsc){
     int input_fd = -1, output_fd = -1, output_mode = 0; /* 0=truncate,1=append */
     char *input_file = NULL, *output_file = NULL;
@@ -175,6 +180,7 @@ void child_with_redirection(char *args[], int argsc){
     exit(1);
 }
 
+//========================================___PIPES___========================================
 
 /* detects pipes */
 int command_with_pipe(char line[]){
@@ -183,15 +189,31 @@ int command_with_pipe(char line[]){
     return 0;
 }
 
-/* split into separate commands */
+/* split into separate commands in the topmost layer */
 int split_pipeline(char line[], char *commands[]){
-    int count = 0;
-    char *token = strtok(line, "|");
-    while (token != NULL && count < MAX_ARGS-1){
-        commands[count++] = token;
-        token = strtok(NULL, "|");
+    int count=0, level=0;
+    char *start=line;
+
+    while(*start==' '||*start=='\t') start++; /* skip leading space */
+
+    for(char *p=line;*p!='\0';p++){
+        if(*p=='(') level++;
+        else if(*p==')') level--;
+        else if(*p=='|' && level==0){
+            *p='\0';
+            char *end = p-1;
+            while(end>start && isspace(*end)) *end--='\0';
+            commands[count++] = start;
+            start=p+1;
+            while(*start==' '||*start=='\t') start++;
+        }
+    } /* add last commands*/
+    if(*start!='\0' && count<MAX_ARGS-1){
+        char *end=start+strlen(start)-1;
+        while(end>start && isspace(*end)) *end--='\0';
+        commands[count++] = start;
     }
-    commands[count] = NULL;
+    commands[count]=NULL;
     return count;
 }
 
@@ -247,6 +269,8 @@ void launch_pipeline(char *commands[], int num_cmds){
     for(int i=0;i<num_cmds;i++) waitpid(pids[i], NULL, 0);
 }
 
+//========================================___BATCH___========================================
+
 /* check for batched commands separated by ; only in the top level */
 int command_with_batch(char line[]){
     int level = 0;
@@ -258,6 +282,7 @@ int command_with_batch(char line[]){
     return 0;
 }
 
+/* splits batched commands in the topmost layer*/
 int split_batch(char line[], char *commands[]){
     int count=0, level=0;
     char *start=line;
@@ -275,7 +300,7 @@ int split_batch(char line[], char *commands[]){
             start=p+1;
             while(*start==' '||*start=='\t') start++;
         }
-    }
+    } /* add last command */
     if(*start!='\0' && count<MAX_ARGS-1){
         char *end=start+strlen(start)-1;
         while(end>start && isspace(*end)) *end--='\0';
@@ -284,6 +309,8 @@ int split_batch(char line[], char *commands[]){
     commands[count]=NULL;
     return count;
 }
+
+//========================================___SUBSHELL___========================================
 
 /* nested subshells */
 int command_with_subshell(char *line){
@@ -297,11 +324,16 @@ void extract_next_subshell(char *line, int start, int *sub_start, int *sub_end){
     int level=0;
     for(int i=start; line[i]!='\0'; i++){
         if(line[i]=='('){
-            if(level==0) *sub_start=i;
-            level++;
+            if(level==0){
+                *sub_start=i;
+                level++;
+            }
         } else if(line[i]==')'){
             level--;
-            if(level==0){ *sub_end=i; return; }
+            if(level==0){
+                *sub_end=i;
+                return; 
+            }
         }
     }
     *sub_start = *sub_end = -1;
@@ -334,6 +366,8 @@ void launch_subshell(char *line){
     waitpid(pid,NULL,0);
 }
 
+//========================================___EXECUTE COMMAND___========================================
+
 /* executes command */
 void execute_command(char *cmd, char lwd[]){
     char copy[MAX_LINE];
@@ -347,7 +381,7 @@ void execute_command(char *cmd, char lwd[]){
     } else if(is_cd(copy)){
         parse_command(copy,args,&argsc);
         run_cd(args,argsc,lwd);
-    } else if(command_with_pipe(copy)){
+    } else if (command_with_pipe(copy)){
         char *pipe_cmds[MAX_ARGS];
         int num_cmds = split_pipeline(copy, pipe_cmds);
         launch_pipeline(pipe_cmds,num_cmds);
