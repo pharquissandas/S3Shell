@@ -107,16 +107,18 @@ void run_cd(char *args[], int argsc, char lwd[]){
     strcpy(lwd, prev);
 }
 
-/* check if command line has < or > */
+//========================================___REDIRECTION___========================================
+
+/* check if command line has < or > in the topmost level */
 int command_with_redirection(char line[]){
-    for(int i = 0; line[i] != '\0'; i++){
-        if (line[i] == '<' || line[i] == '>')
-            return 1;
+    int level = 0;
+    for(int i=0; line[i]!='\0'; i++){
+        if(line[i]=='(') level++;
+        else if(line[i]==')') level--;
+        else if((line[i]=='<' && level==0)||(line[i]=='>' && level==0)) return 1;
     }
     return 0;
 }
-
-//========================================___REDIRECTION___========================================
 
 /* handle commands with redirection */
 void launch_program_with_redirection(char *args[], int argsc){
@@ -184,8 +186,12 @@ void child_with_redirection(char *args[], int argsc){
 
 /* detects pipes */
 int command_with_pipe(char line[]){
-    for (int i = 0; line[i] != '\0'; i++)
-        if (line[i] == '|') return 1;
+    int level = 0;
+    for(int i=0; line[i]!='\0'; i++){
+        if(line[i]=='(') level++;
+        else if(line[i]==')') level--;
+        else if(line[i]=='|' && level==0) return 1;
+    }
     return 0;
 }
 
@@ -271,7 +277,7 @@ void launch_pipeline(char *commands[], int num_cmds){
 
 //========================================___BATCH___========================================
 
-/* check for batched commands separated by ; only in the top level */
+/* check for batched commands separated by ; in the topmost level */
 int command_with_batch(char line[]){
     int level = 0;
     for(int i=0; line[i]!='\0'; i++){
