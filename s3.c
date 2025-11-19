@@ -134,61 +134,87 @@ int command_with_redirection(char line[]){
     return 0;
 }
 
-/* handle commands with redirection */
-void launch_program_with_redirection(char *args[], int argsc){
-    if (argsc > 0 && strcmp(args[ARG_PROGNAME], "exit") == 0){
-        exit(0);
-    }
+// parent manages fork and wait. line passed instead of args to allow parsing only top layer
+void launch_program_with_redirection(char *line, char lwd[]){
+
     pid_t pid = fork();
     if (pid < 0){ 
-        perror("fork failed"); exit(1);
+        perror("fork failed");
+        exit(1);
     }
     else if (pid == 0){
-        child_with_redirection(args, argsc);
+        child_with_redirection(line, lwd);
     }
     else{
         waitpid(pid, NULL, 0);
     }
 }
 
-/* child for redirection, now supports combined input/output */
-void child_with_redirection(char *args[], int argsc){
-    int input_fd = -1, output_fd = -1, output_mode = 0; // 0=truncate,1=append
-    char *input_file = NULL, *output_file = NULL;
+// child handles redirection and execution
+void child_with_redirection(char *line, char lwd[]){
+    char command[MAX_LINE];
+    strcpy(command, line);
+    
+    char *input_file = NULL;
+    char *output_file = NULL;
+    int output_mode = 0; // 0 = trunc, 1 = append
+    int input_fd = -1;
+    int output_fd = -1;
 
-    for (int i = 0; i < argsc; i++){
-        if (args[i] == NULL){
-            continue;
-        }
+    // Markers to cut the string later
+    char *cut_input = NULL;
+    char *cut_output = NULL;
 
-        if (strcmp(args[i], "<") == 0 && i+1 < argsc){
-            input_file = args[i+1];
-            args[i] = NULL;
-            args[i+1] = NULL;
-            i++;
-        }
-        else if (strcmp(args[i], ">") == 0 && i+1 < argsc){
-            output_file = args[i+1];
-            output_mode = 0;
-            args[i] = NULL;
-            args[i+1] = NULL;
-            i++;
-        }
-        else if (strcmp(args[i], ">>") == 0 && i+1 < argsc){
-            output_file = args[i+1];
-            output_mode = 1;
-            args[i] = NULL;
-            args[i+1] = NULL;
-            i++;
+    // parse for redirection at topmost level
+    int level = 0;
+    for (int i = 0; command[i] != '\0'; i++) {
+        if (command[i] == '(') level++;
+        else if (command[i] == ')') { if (level > 0) level--; }
+        else if (level == 0) {
+            if (command[i] == '<') {
+                cut_input = &command[i];
+                input_file = &command[i+1];
+            } else if (command[i] == '>') {
+                cut_output = &command[i];
+                if (command[i+1] == '>') {
+                    output_mode = 1;
+                    output_file = &command[i+2];
+                    i++; 
+                } else {
+                    output_mode = 0;
+                    output_file = &command[i+1];
+                }
+            }
         }
     }
 
+    if (cut_input) {
+        *cut_input = '\0';
+    }
+    if (cut_output) {
+        *cut_output = '\0';
+    }
+
+    // trim whitespace from filenames
+    if (input_file) {
+        while(isspace(*input_file)) input_file++;
+        char *end = input_file + strlen(input_file) - 1;
+        while(end > input_file && isspace(*end)) *end-- = '\0';
+    }
+    if (output_file) {
+        while(isspace(*output_file)) output_file++;
+        char *end = output_file + strlen(output_file) - 1;
+        while(end > output_file && isspace(*end)) *end-- = '\0';
+    }
+
+    // perform redirection
     if (input_file){
         input_fd = open(input_file, O_RDONLY);
         if (input_fd < 0){ 
             perror("open input failed"); 
             exit(1); 
         }
+        dup2(input_fd, STDIN_FILENO);
         if (dup2(input_fd, STDIN_FILENO) < 0){ 
             perror("dup2 input failed"); 
             exit(1); 
@@ -198,15 +224,15 @@ void child_with_redirection(char *args[], int argsc){
 
     if (output_file){
         if (output_mode){
-            output_fd = open(output_file, O_WRONLY | O_CREAT | O_APPEND, 0644);
-        }
-        else{
-            output_fd = open(output_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            output_fd = open(output_file, O_WRONLY | O_CREAT | O_APPEND, 0644); // 0644 = rw-r--r--
+        }else{
+            output_fd = open(output_file, O_WRONLY | O_CREAT | O_TRUNC, 0644); // 0644 = rw-r--r--
         }
         if (output_fd < 0){ 
             perror("open output failed"); 
             exit(1); 
         }
+        dup2(output_fd, STDOUT_FILENO);
         if (dup2(output_fd, STDOUT_FILENO) < 0){ 
             perror("dup2 output failed"); 
             exit(1); 
@@ -214,12 +240,10 @@ void child_with_redirection(char *args[], int argsc){
         close(output_fd);
     }
 
-    if (args[ARG_PROGNAME] == NULL){
-        exit(0);
-    }
-    execvp(args[ARG_PROGNAME], args);
-    perror("execvp failed");
-    exit(1);
+    // recursively execute command
+    execute_command(command, lwd);
+    exit(0);
+
 }
 
 //========================================___PIPES___========================================
@@ -241,30 +265,15 @@ int command_with_pipe(char line[]){
     return 0;
 }
 
-/* trim leading & trailing whitespace (in-place) */
-static void trim_ws(char *s){
-    char *end;
-    while(isspace((unsigned char)*s)) s++;
-    if(*s == 0){ 
-        *s = 0; 
-        return; 
-    }
-    end = s + strlen(s) - 1;
-    while(end > s && isspace((unsigned char)*end)){
-        end--;
-    }
-    *(end+1) = '\0';
-}
-
 /* split into separate commands in the topmost layer */
 int split_pipeline(char line[], char *commands[]){
     int count=0, level=0;
     char *start=line;
 
     while(*start==' '||*start=='\t'){
-        start++; /* skip leading space */
+        start++; /* skip leading whitespace */
     }
-
+    // detect pipes at topmost level
     for(char *p=line;*p!='\0';p++){
         if(*p=='('){
             level++;
@@ -294,109 +303,55 @@ int split_pipeline(char line[], char *commands[]){
     return count;
 }
 
-/* helper to extract subshell (first top-level pair) -- returns 0 on success */
-void extract_next_subshell(char *line, int start, int *sub_start, int *sub_end){
-    int level=0;
-    *sub_start = *sub_end = -1;
-    for(int i=start; line[i]!='\0'; i++){
-        if(line[i]=='('){
-            if(level==0) *sub_start = i;
-            level++;
-        } else if(line[i]==')'){
-            level--;
-            if(level==0){
-                *sub_end = i;
-                return;
-            }
-        }
-    }
-}
-
-/* launch the full pipeline */
+/* launch a pipeline of commands */
 void launch_pipeline(char *commands[], int num_cmds){
-    int pipefds[2*(num_cmds-1)];
+    int pipefds[2 * (num_cmds - 1)];
     pid_t pids[num_cmds];
 
-    for (int i=0;i<num_cmds-1;i++)
+    for (int i=0; i<num_cmds-1; i++){
         if (pipe(pipefds + i*2) < 0){ 
             perror("pipe failed"); 
             exit(1); 
         }
+    }
+    // lwd for child processes
+    char child_lwd[MAX_PROMPT_LEN - 6];
+    init_lwd(child_lwd);
 
-    for (int i=0;i<num_cmds;i++){
+    for (int i = 0; i < num_cmds; i++) {
         pids[i] = fork();
-        if (pids[i]<0){ 
-            perror("fork failed"); 
-            exit(1); 
-        }
-
-        if (pids[i]==0){
-            if(i>0){ 
-                if (dup2(pipefds[(i-1)*2], STDIN_FILENO) < 0){ 
-                    perror("dup2 failed"); 
-                    exit(1); 
-                } 
-            }
-            if(i<num_cmds-1){ 
-                if (dup2(pipefds[i*2+1], STDOUT_FILENO) < 0){ 
-                    perror("dup2 failed"); 
-                    exit(1); 
-                } 
-            }
-            for(int j=0;j<2*(num_cmds-1);j++){
-                close(pipefds[j]);
-            }
-
-            char stage[MAX_LINE];
-            strncpy(stage, commands[i], MAX_LINE);
-            trim_ws(stage);
-            if (stage[0] == '('){
-                int sstart, send;
-                extract_next_subshell(stage, 0, &sstart, &send);
-                if (sstart != -1 && send != -1){
-                    char inner[MAX_LINE];
-                    int len = send - sstart - 1;
-                    if (len >= MAX_LINE){
-                        len = MAX_LINE-1;
-                    }
-                    strncpy(inner, stage + sstart + 1, len);
-                    inner[len] = '\0';
-                    char sub_lwd[MAX_PROMPT_LEN-6];
-                    init_lwd(sub_lwd);
-                    execute_command(inner, sub_lwd);
-                    exit(0);
-                }
-            }
-
-            char temp[MAX_LINE];
-            strncpy(temp, commands[i], MAX_LINE);
-            char *args[MAX_ARGS]; int argsc;
-            parse_command(temp, args, &argsc);
-            if (argsc == 0){ 
-                exit(0); 
-            }
-
-            if (command_with_redirection(commands[i])){
-                child_with_redirection(args, argsc);
-                exit(1);
-            }
-
-            execvp(args[ARG_PROGNAME], args);
-            perror("execvp failed");
+        if (pids[i] < 0){
+            perror("fork failed");
             exit(1);
         }
+
+        if (pids[i] == 0) {
+            if (i > 0){
+                dup2(pipefds[(i - 1) * 2], STDIN_FILENO);
+            }
+            if (i < num_cmds - 1){
+                dup2(pipefds[i * 2 + 1], STDOUT_FILENO);
+            }
+            for (int j = 0; j < 2 * (num_cmds - 1); j++){
+                close(pipefds[j]);
+            }
+            // recursively execute command
+            execute_command(commands[i], child_lwd);
+            exit(0);
+        }
     }
 
-    for(int i=0;i<2*(num_cmds-1);i++){
+    for (int i = 0; i < 2 * (num_cmds - 1); i++){
         close(pipefds[i]);
     }
-    for(int i=0;i<num_cmds;i++){
+    for (int i = 0; i < num_cmds; i++){
         waitpid(pids[i], NULL, 0);
     }
 }
 
 //========================================___BATCH___========================================
 
+// detect batch commands at topmost level
 int command_with_batch(char line[]){
     int level = 0;
     for(int i=0; line[i]!='\0'; i++){
@@ -413,6 +368,7 @@ int command_with_batch(char line[]){
     return 0;
 }
 
+// split batch commands at topmost level
 int split_batch(char line[], char *commands[]){
     int count=0, level=0;
     char *start=line;
@@ -438,7 +394,7 @@ int split_batch(char line[], char *commands[]){
                 start++;
             }
         }
-    }
+    } // add last command
     if(*start!='\0' && count<MAX_ARGS-1){
         char *end=start+strlen(start)-1;
         while(end>start && isspace((unsigned char)*end)){
@@ -461,149 +417,83 @@ int command_with_subshell(char *line){
     return 0;
 }
 
-/* launch subshell, supports nested commands and outer redirection */
-void launch_subshell(char *line){
-    /* line may contain outer redirection after the closing parenthesis */
-    int sstart = -1, send = -1;
-    extract_next_subshell(line, 0, &sstart, &send);
-    if (sstart == -1 || send == -1){
-        fprintf(stderr, "No subshell found\n");
+/* launch a subshell command */
+void launch_subshell(char *line) {
+    char *start = strchr(line, '(');
+    char *end = strrchr(line, ')');
+
+    if (!start || !end || end < start) {
+        fprintf(stderr, "Subshell syntax error\n");
         return;
     }
 
-    /* extract inner command */
-    char inner[MAX_LINE];
-    int inner_len = send - sstart - 1;
-    if (inner_len >= MAX_LINE){
-        inner_len = MAX_LINE-1;
-    }
-    strncpy(inner, line + sstart + 1, inner_len);
-    inner[inner_len] = '\0';
-
-    /* figure out outer tokens (after closing paren) */
-    char after[MAX_LINE] = {0};
-    if (send + 1 < (int)strlen(line)){
-        strncpy(after, line + send + 1, MAX_LINE-1);
-        trim_ws(after);
-    }
-
-    /* if there is an outer redirection on the top level, parse it and apply to the subshell process */
-    int has_outer_redir = command_with_redirection(after);
+    // copy text inside '(' and ')'
+    char subcmd[MAX_LINE];
+    int len = end - start - 1;
+    strncpy(subcmd, start + 1, len);
+    subcmd[len] = '\0';
 
     pid_t pid = fork();
-    if (pid < 0){
-        perror("fork failed"); 
-        return; 
+    if (pid < 0) {
+        perror("fork failed");
+        return;
     }
-    if (pid == 0){
-        /* child: runs the subshell content */
-        char sub_lwd[MAX_PROMPT_LEN-6];
+    // child process
+    if (pid == 0) {
+        char sub_lwd[MAX_PROMPT_LEN - 6]; // last working directory for subshell
         init_lwd(sub_lwd);
-
-        if (has_outer_redir){
-            char tmp[MAX_LINE];
-            strncpy(tmp, after, MAX_LINE);
-            char *tokens[MAX_ARGS];
-            int tac = 0;
-            char *tok = strtok(tmp, " ");
-            while(tok && tac < MAX_ARGS-1){ tokens[tac++] = tok; tok = strtok(NULL, " "); }
-            tokens[tac] = NULL;
-
-            char *args[MAX_ARGS]; int argsc = tac;
-            for(int i=0;i<tac;i++) args[i]=tokens[i];
-
-            child_with_redirection(args, argsc);
-        }
-
-        /* now run inner content (it may be a batch or pipeline or simple command) */
-        if (command_with_batch(inner)){
-            char *batch[MAX_ARGS];
-            int batch_count = split_batch(inner, batch);
-            for (int i = 0; i < batch_count; i++){
-                execute_command(batch[i], sub_lwd);
-            }
-        } else {
-            execute_command(inner, sub_lwd);
-        }
+        // recursively execute the command inside the subshell
+        execute_command(subcmd, sub_lwd);
         exit(0);
+    } else { 
+        waitpid(pid, NULL, 0); // parent waits for child
     }
-    waitpid(pid, NULL, 0);
 }
 
 //========================================___EXECUTE COMMAND___========================================
 
-/* executes command */
-void execute_command(char *cmd, char lwd[]){
-    /* trim leading/trailing whitespace in copy */
+void execute_command(char *cmd, char lwd[]) {
     char copy[MAX_LINE];
-    strncpy(copy, cmd, MAX_LINE-1);
-    copy[MAX_LINE-1] = '\0';
-    trim_ws(copy);
+    strcpy(copy, cmd);
 
-    if (copy[0] == '\0'){
-        return;
-    }
-
-    /* 1) batched commands at top level */
-    if (command_with_batch(copy)){
+    // batch (;)
+    if (command_with_batch(copy)) {
         char *batch[MAX_ARGS];
-        int batch_count = split_batch(copy, batch);
-        for (int i = 0; i < batch_count; i++){
-            execute_command(batch[i], lwd);
-        }
+        int count = split_batch(copy, batch);
+        for (int i = 0; i < count; i++) execute_command(batch[i], lwd);
         return;
     }
-
-    /* 2) if entire command is a top-level subshell OR contains a subshell at top-level */
-    if (command_with_subshell(copy)){
-        /* if it's a pipeline where a stage is a subshell, the pipeline handler will deal with it.
-           otherwise, it's a subshell possibly with outer redirection; launch_subshell handles both. */
-        /* check if this line is a pipeline at top level */
-        if (command_with_pipe(copy)){
-            char *pipe_cmds[MAX_ARGS];
-            int num_cmds = split_pipeline(copy, pipe_cmds);
-            launch_pipeline(pipe_cmds, num_cmds);
-            return;
-        }
-        /* otherwise launch subshell (handles outer redirection) */
+    // pipe (|) 
+    if (command_with_pipe(copy)) {
+        char *pipe_cmds[MAX_ARGS];
+        int num_cmds = split_pipeline(copy, pipe_cmds);
+        launch_pipeline(pipe_cmds, num_cmds);
+        return;
+    }
+    // redirection (<, >)
+    // redirection before subshell ensures (ls) > file is treated as a redirection of a subshell
+    if (command_with_redirection(copy)) {
+        launch_program_with_redirection(copy, lwd); 
+        return;
+    }
+    // subshell
+    if (command_with_subshell(copy)) {
         launch_subshell(copy);
         return;
     }
-
-    /* 3) cd built-in */
-    if (is_cd(copy)){
+    // CD
+    if (is_cd(copy)) {
         char *args[MAX_ARGS];
         int argsc;
         parse_command(copy, args, &argsc);
         run_cd(args, argsc, lwd);
         return;
     }
-
-    /* 4) pipeline */
-    if (command_with_pipe(copy)){
-        char *pipe_cmds[MAX_ARGS];
-        int num_cmds = split_pipeline(copy, pipe_cmds);
-        launch_pipeline(pipe_cmds, num_cmds);
-        return;
-    }
-
-    /* 5) redirection only */
-    if (command_with_redirection(copy)){
-        char *args[MAX_ARGS];
-        int argsc;
-        parse_command(copy, args, &argsc);
-        launch_program_with_redirection(args, argsc);
-        return;
-    }
-
-    /* 6) plain command */
-    {
-        char *args[MAX_ARGS];
-        int argsc;
-        parse_command(copy, args, &argsc);
-        if (argsc == 0){
-            return;
-        }
+    // simple command
+    char *args[MAX_ARGS];
+    int argsc;
+    parse_command(copy, args, &argsc);
+    if (argsc > 0) {
         launch_program(args, argsc);
     }
 }

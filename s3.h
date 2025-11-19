@@ -32,19 +32,19 @@ void construct_shell_prompt(char shell_prompt[], char lwd[]);
 void read_command_line(char line[], char lwd[]);
 void parse_command(char line[], char *args[], int *argsc);
 
+/* basic execution */
+void child(char *args[], int argsc);
+void launch_program(char *args[], int argsc);
+
 /* cd support built-in */
 void init_lwd(char lwd[]);
 int is_cd(char line[]);
 void run_cd(char *args[], int argsc, char lwd[]);
 
-/* basic execution */
-void child(char *args[], int argsc);
-void launch_program(char *args[], int argsc);
-
 /* redirection */
-void launch_program_with_redirection(char *args[], int argsc);
-void child_with_redirection(char *args[], int argsc);
 int command_with_redirection(char line[]);
+void launch_program_with_redirection(char *line, char lwd[]);
+void child_with_redirection(char *line, char lwd[]);
 
 /* pipe support */
 int command_with_pipe(char line[]);
@@ -57,7 +57,6 @@ int split_batch(char line[], char *commands[]);
 
 /* subshells support (nested) */
 int command_with_subshell(char *line);
-void extract_next_subshell(char *line, int start, int *sub_start, int *sub_end);
 void launch_subshell(char *line);
 
 /* execute command */
