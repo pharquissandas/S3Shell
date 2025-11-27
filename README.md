@@ -1,8 +1,7 @@
-# s3 – Software Systems Shell
+# Shell Implementation
 
-*Assignment 1 – Shell Implementation*
-*Authors:* Preet Harquissandas, Mikhail Agakov
-*Course:* Software Systems
+## Software Systems Assignment 1 - Preet Harquissandas and Mikhail Agakov
+
 
 ---
 
@@ -64,7 +63,7 @@ This README describes the features implemented, architectural decisions, and any
 ✔ Uses getcwd() inside construct_shell_prompt()
 
 Example prompt:
-[/home/user/projects/s3 s3]$
+`[/home/user/projects/s3 s3]$`
 
 ---
 
@@ -138,39 +137,39 @@ We used a set of commands covering all features:
 
 ### *Basic Commands*
 
-* ls
-* wc txt/phrases.txt
-* man cat
-* grep burn txt/phrases.txt
+* `ls`
+* `wc txt/phrases.txt`
+* `man cat`
+* `grep burn txt/phrases.txt`
 
 ### *Redirection*
 
-* grep June < calendar.txt
-* tr a-z A-Z < phrases.txt
+* `grep June < calendar.txt`
+* `tr a-z A-Z < phrases.txt`
 
 ### *Pipelines*
 
-* cat txt/phrases.txt | sort | wc -l
-* ps aux | grep python | sort -k 3 -nr | head
-* tr a-z A-Z < txt/phrases.txt | grep BURN
+* `cat txt/phrases.txt | sort | wc -l`
+* `ps aux | grep python | sort -k 3 -nr | head`
+* `tr a-z A-Z < txt/phrases.txt | grep BURN`
 
 ### *Batched Commands*
 
-* echo A ; echo B ; ls -l
-* mkdir results ; cat txt/phrases.txt | sort > results/sorted_phrases.txt ; echo "Done"
+* `echo A ; echo B ; ls -l`
+* `mkdir results ; cat txt/phrases.txt | sort > results/sorted_phrases.txt ; echo "Done"`
 
 ### *Subshells*
 
-* (cd txt ; ls)
-* (cat txt/phrases.txt | sort) | head
-* Nested: ((echo A))
-* (echo a ; (echo b ; (echo c)))
+* `(cd txt ; ls)`
+* `(cat txt/phrases.txt | sort) | head`
+* Nested: `((echo A))`
+* `(echo a ; (echo b ; (echo c)))`
 
 ### *Combined input + output redirection in a single command*
 
-* (tr a-z A-Z < txt/phrases.txt) > txt/phrases_upper.txt
-* sort < unsorted.txt > sorted.txt
-* ((tr a-z A-Z < txt/phrases.txt) | head) > txt/new_file.txt
+* `(tr a-z A-Z < txt/phrases.txt) > txt/phrases_upper.txt`
+* `sort < unsorted.txt > sorted.txt`
+* `((tr a-z A-Z < txt/phrases.txt) | head) > txt/new_file.txt`
 ---
 
 ## 10. Possible Future Enhancements
@@ -186,8 +185,6 @@ We used a set of commands covering all features:
 
 ### *Compile*
 
-gcc *.c -o s3
+`gcc *.c -o s3`
 
-### *Run*
-
-./s3
+`./s3`
