@@ -10,7 +10,7 @@
 s3 is a custom Unix-like shell implemented in C.
 It supports execution of external programs, built-in commands, redirection, pipelines, batched commands, and optional extensions such as subshells.
 
-This README describes the features implemented, architectural decisions, and any additional enhancements beyond the base requirements.
+This README document describes the features implemented, the architectural decisions made, and any additional enhancements beyond the base requirements.
 
 ---
 
@@ -89,9 +89,9 @@ Example prompt:
 
 ### *6.1 Features*
 
-✔ Splits command line into batch units
+✔ Splits the command line into batch units
 
-✔ Each batch unit processed independently
+✔ Each batch unit is processed independently
 
 ✔ Supports pipelines or plain commands inside batch elements
 
@@ -186,5 +186,7 @@ We used a set of commands covering all features:
 ### *Compile*
 
 `gcc *.c -o s3`
+
+### *Run*
 
 `./s3`
