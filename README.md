@@ -1,7 +1,9 @@
 # Shell Implementation
 
-## Software Systems Assignment 1 - Preet Harquissandas and Mikhail Agakov
-
+## Software Systems Assignment 1
+## Authors
+* Preet Harquissandas (CID: 02589338)
+* Mikhail Agakov (CID: 02560202)
 
 ---
 
@@ -11,6 +13,30 @@ s3 is a custom Unix-like shell implemented in C.
 It supports execution of external programs, built-in commands, redirection, pipelines, batched commands, and optional extensions such as subshells.
 
 This README document describes the features implemented, the architectural decisions made, and any additional enhancements beyond the base requirements.
+
+## Summary
+
+### Core Requirements
+| Feature | Status | Description |
+| :--- | :--- | :--- |
+| **Basic Execution** | **Fully Implemented** | Fork/Exec/Wait pattern, argument parsing. |
+| **Redirection** | **Fully Implemented** | Support for `>`, `>>`, and `<`. |
+| **Built-in `cd`** | **Fully Implemented** | Supports `cd`, `cd <dir>`, `cd -`, `cd ~` (home). |
+| **Prompt** | **Fully Implemented** | dynamic prompt showing current working directory. |
+| **Pipelines** | **Fully Implemented** | Arbitrary length pipelines (`cmd1 | cmd2 | cmd3`). |
+| **Batched Commands** | **Fully Implemented** | Sequential execution using `;`. |
+
+### Proposed Extensions (PEs)
+| Extension | Status | Description |
+| :--- | :--- | :--- |
+| **PE1: Subshells** | **Fully Implemented** | `(cmd)` executes in a child shell process. |
+| **PE2: Nested Subshells** | **Fully Implemented** | Supports deep nesting like `((cmd))`. |
+
+### Extra Features
+| Extension | Status | Description |
+| :--- | :--- | :--- |
+| **Combined Input + Output Redirection** | **Fully Implemented** | Supports instructions like `sort < input.txt > output.txt` |
+| **Complex Recursive Redirection** | **Fully Implemented** | Supports instructions like `(ls -l \| grep .c) > source_files.txt` |
 
 ---
 
@@ -44,9 +70,9 @@ This README document describes the features implemented, the architectural decis
 
 ### *3.3 Implementation Notes*
 
-* Detection of redirection operator using a custom parser
+* Detection of redirection operator using a custom parser that respects parenthesis nesting
 * Launch handled through launch_program_with_redirection()
-* Only one redirection operator is required by the spec, and handling is limited to that by design
+* While the specification only required handling a single redirection operator, we extended this to support multiple operators (see Section 8).
 
 ---
 
@@ -115,9 +141,9 @@ Example prompt:
 
 ---
 
-## *8. Further Enhancements*
+## *8. Extra Features*
 
-### 8.1 FE: Combined Input + Output Redirection
+### 8.1: Combined Input + Output Redirection
 
 ✔ Support for redirecting both standard input and standard output in a single command
 
@@ -125,9 +151,13 @@ Example prompt:
 
 ✔ Input and output redirections are applied by configuring the appropriate file descriptors
 
-✔ Compatible with other features such as pipelines and subshell execution
+### 8.2: Complex Recursive Redirection
 
-✔ Combined input + output redirection in a single command
+✔ Support for applying redirection to entire logical blocks (like subshells) rather than just simple binaries.
+
+✔ Achieved a recursive architecture: the shell detects redirection at the top level, sets up the file descriptors, and then recursively calls the executor for the command string inside.
+
+✔ Compatible with other features such as pipelines and subshell execution
 
 ---
 
@@ -172,16 +202,7 @@ We used a set of commands covering all features:
 * `((tr a-z A-Z < txt/phrases.txt) | head) > txt/new_file.txt`
 ---
 
-## 10. Possible Future Enhancements
-
-* Command history, arrow-key navigation
-* Background jobs with process groups
-* Globbing (*.txt, file??.c)
-* More robust error messages
-
----
-
-## 11. Compilation & Usage
+## 10. Compilation & Usage
 
 ### *Compile*
 
