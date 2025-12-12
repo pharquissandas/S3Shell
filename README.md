@@ -23,7 +23,7 @@ This README document describes the features implemented, the architectural decis
 | **Redirection** | **Fully Implemented** | Support for `>`, `>>`, and `<`. |
 | **Built-in `cd`** | **Fully Implemented** | Supports `cd`, `cd <dir>`, `cd -`, `cd ~` (home). |
 | **Prompt** | **Fully Implemented** | dynamic prompt showing current working directory. |
-| **Pipelines** | **Fully Implemented** | Arbitrary length pipelines (`cmd1 | cmd2 | cmd3`). |
+| **Pipelines** | **Fully Implemented** | Arbitrary length pipelines (`cmd1 \| cmd2 \| cmd3`). |
 | **Batched Commands** | **Fully Implemented** | Sequential execution using `;`. |
 
 ### Proposed Extensions (PEs)
